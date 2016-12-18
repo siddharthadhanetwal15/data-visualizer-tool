@@ -1,0 +1,85 @@
+---
+title: "Data Health Report"
+output: html_document
+---
+# QDQE Report Visualizer Tool 
+```{r, echo=FALSE,echo=FALSE,message=FALSE}
+options(warn=-1)     #suppress warnings
+
+rdata_file <- "reporting_variables.RData"
+data_loaded <- load(paste(getwd(),"/",rdata_file,sep=""))
+
+num_enablement_config <- sum(count_da_category[c("Enablement/Configuration Issue","Failed/Incomplete Validation")])
+
+
+count_status          <- margin.table(da_status_by_issue,2)
+sum_unuable_reg       <- sum(count_status[names(count_status)%in%c("Awaiting Data", "Preliminary - Major Anomalies")])
+sum_total_reg         <- sum(count_status)
+
+count_status           <- margin.table(sum_MW_by_status,2)
+sum_unuable_mw         <- sum(count_status[names(count_status)%in%c("Awaiting Data", "Preliminary - Major Anomalies")])
+sum_total_mw           <- sum(count_status)
+pct_unusable_mw        <-sum_unuable_mw/sum_total_mw
+
+bulk_issues_table <- bulk_issues_table[!is.na(names(bulk_issues_table))]
+
+```
+
+Team,
+In the recent dispatch, `r round(pct_unusable_mw*100,2)`% of our portfolio's MW (`r sum_unuable_reg` of `r sum_total_reg` assets) were unusable for initial performance calculations. `r round(num_enablement_config/sum_unuable_reg*100,2)`% of these issues (`r num_enablement_config`/`r sum_unuable_reg` assets) resulted from incomplete enablement, incorrect platform configuration, or unfinished DMT meter validations. The majority of the remaining assets had no data available in the platform for the M&V period.<link href="custom.css" rel="stylesheet"> 
+ 
+## The following table describes the sources of reduced visibility:
+
+```{r results='asis', echo=FALSE, fig.width=8,echo=FALSE,message=FALSE}
+#print table 
+library(xtable)
+
+df_da_category <- data.frame("Category"=names(count_da_category),
+              "Number Not Reporting"=as.integer(unname(count_da_category)),
+                             "Percent Not Reporting"=paste(as.integer(100*unname(count_da_category)/(count_da_category[names(count_da_category)=="Total"])),"%",sep=""),
+                                "Description"=c("EnerNOC platform is not capturing entire utility service account",
+                                                "Data is missing for most or all of M&V period",
+                                                "Open 2012/2013 validation case",
+                                                "Anomalous estimations, anomalous zeroes, spikes, drops",
+                                                ""),
+                                "Issue Owner"=c("Ops",
+                                                "Ops",
+                                                "DMT",
+                                                "Ops,PS&T",
+                                                ""))
+
+df_da_category<-df_da_category[order(-df_da_category$Number.Not.Reporting),]
+
+df_da_category_total<-df_da_category[df_da_category$Category %in% c("Total"),]
+df_da_category<-df_da_category[!df_da_category$Category %in% c("Total"),]
+df_da_category<-df_da_category[!df_da_category$Number.Not.Reporting %in% 0,]
+df_da_category<-rbind(df_da_category,df_da_category_total)
+
+summary_table <- xtable(data.frame(df_da_category))
+print.xtable(summary_table,type="html",include.rownames=FALSE)
+#print(summary_table, include.rownames=FALSE, scalebox=0.7)  #generate a table for pdf output
+```
+*Further details into impacted assets are available from the Data Quality team
+
+## Graphs
+```{r results='asis', echo=FALSE, fig.width=12,echo=FALSE,message=FALSE}
+#print barplot 1
+barplot(da_status_by_issue, main="DA data status by registration issue",
+  xlab="DA Data Status", 
+  ylab="Number of registrations",
+    legend = rownames(da_status_by_issue))
+
+#barplot with number of bulk issues
+if(length(bulk_issues_table)!=0){            #if bulk issues exist, plot them here
+  barplot(bulk_issues_table, main="Bulk Issues",
+          xlab="", 
+          ylab="Number of registrations")
+  }
+
+#create contingency table with expected capacity sums
+p <- barplot(sum_MW_by_status, main="",
+             xlab="DA Data Status",
+             ylab="Expected Capacity (MW)",
+             legend = rownames(sum_MW_by_status)) 
+
+```
